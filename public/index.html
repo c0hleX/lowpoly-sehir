@@ -24,6 +24,14 @@ button.main{background:var(--ac);color:#fff;font-weight:600;flex:1}
 #joy{position:fixed;left:calc(22px + env(safe-area-inset-left,0px));bottom:calc(26px + env(safe-area-inset-bottom,0px));width:116px;height:116px;border-radius:50%;background:rgba(255,255,255,.22);border:2px solid rgba(255,255,255,.6);display:none;touch-action:none}
 #knob{position:absolute;left:38px;top:38px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.85)}
 #jump{position:fixed;right:calc(24px + env(safe-area-inset-right,0px));bottom:calc(40px + env(safe-area-inset-bottom,0px));width:76px;height:76px;border-radius:50%;display:none;background:rgba(255,255,255,.7);color:#222;font-weight:700;touch-action:none}
+#lhead{position:fixed;left:0;right:0;top:0;padding:calc(10px + env(safe-area-inset-top,0px)) 12px 10px;background:var(--bg);color:var(--fg);backdrop-filter:blur(8px);font-size:13px;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center}
+#lbot{position:fixed;left:0;right:0;bottom:0;padding:12px 12px calc(12px + env(safe-area-inset-bottom,0px));background:var(--bg);color:var(--fg);backdrop-filter:blur(8px)}
+#lmsg{font-size:13px;margin-bottom:8px;min-height:18px}
+#lslots,#lhand{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.sl{flex:1;min-width:72px;padding:10px 6px;border-radius:12px;border:2px dashed var(--bd);text-align:center;font-size:13px;cursor:pointer;background:var(--chip);color:var(--fg)}
+.sl.f{border-style:solid;border-color:transparent}
+.blk{padding:10px 14px;border-radius:12px;color:#fff;font-weight:600;cursor:pointer;border:3px solid transparent;font-size:14px}
+.blk.sel{border-color:var(--fg)}
 @media (max-width:700px){#panel{top:auto;width:100%;height:46vh;transform:none}#panel.hide{transform:translateY(105%)}}
 </style></head><body>
 <div id="panel"><h1>Karakterini Tasarla</h1>
@@ -33,6 +41,8 @@ button.main{background:var(--ac);color:#fff;font-weight:600;flex:1}
 <button id="edit">👕 Karakter</button>
 <div id="hint">WASD / oklar: yürü · Shift: koş · Boşluk: zıpla · Sürükle: kamera · Tekerlek: yakınlaştır</div>
 <div id="net" style="position:fixed;right:calc(12px + env(safe-area-inset-right,0px));top:calc(12px + env(safe-area-inset-top,0px));padding:6px 10px;border-radius:10px;background:var(--bg);color:var(--fg);font-size:12px;backdrop-filter:blur(6px)">bağlanıyor...</div>
+<div id="prompt" style="display:none;position:fixed;left:50%;bottom:calc(80px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);padding:10px 16px;border-radius:12px;background:var(--ac);color:#fff;font-weight:600;cursor:pointer;white-space:nowrap">E · Kodlama Okulu’na gir</div>
+<div id="labui" style="display:none"><div id="lhead"></div><div id="lbot"><div id="lmsg"></div><div id="lslots"></div><div id="lhand"></div></div></div>
 <div id="joy"><div id="knob"></div></div><button id="jump">ZIPLA</button>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
@@ -107,6 +117,11 @@ function lamp(x,z){const g=new THREE.Group();g.position.set(x,0,z);scene.add(g);
 for(let i=0;i<16;i++){const a=i/16*Math.PI*2,r=100+R()*20,h=14+R()*18;
  const m=new THREE.Mesh(new THREE.ConeGeometry(14+R()*8,h,5),M(i%3?'#6f8f7a':'#8a9aa5'));m.position.set(Math.cos(a)*r,h/2-1,Math.sin(a)*r);scene.add(m)}
 // arabalar
+// merkez: Kodlama Okulu kulesi (yol kesişiminin tam ortasında; araçlar dar tabanın iki yanından geçer)
+box(2,10,2,'#6c5ce7',0,5,0,scene);box(8,.6,8,'#fdcb6e',0,10.3,0,scene);box(6,.4,6,'#e17055',0,11,0,scene);
+box(1.1,1.9,.12,'#2d3436',0,.95,1.03,scene);box(.9,.9,.12,'#74b9ff',0,6,1.03,scene);
+boxes.push({x:0,z:0,w:1.2,d:1.2});
+{const sg=tag('KODLAMA OKULU');sg.scale.set(7,1.75,1);sg.position.set(0,12.6,0);scene.add(sg)}
 const cars=[];
 for(let i=0;i<14;i++){const g=new THREE.Group(),c=['#e11d48','#2563eb','#f59e0b','#16a34a','#f5f5f5','#7c3aed'][i%6];
  box(1.8,.7,3.6,c,0,.6,0,g);box(1.5,.6,1.8,'#9ec5e8',0,1.25,-.2,g);
@@ -202,14 +217,16 @@ function connect(){
  ws.onmessage=e=>{let m;try{m=JSON.parse(e.data)}catch(_){return}
   if(m.t=='w'){myId=m.id;m.players.forEach(addP)}
   else if(m.t=='j')addP(m);else if(m.t=='l')rmP(m.id);
+  else if(m.t=='ls')labState(m);else if(m.t=='lrun')labPlay(m);else if(m.t=='lx')labExitUI();
   else if(m.t=='full')$('net').textContent='sunucu dolu';
   else if(m.t=='s'){snap.c=m.c;$('net').textContent='🟢 '+m.n+' oyuncu çevrimiçi';
-   m.p.forEach(a=>{const o=others.get(a[0]);if(!o)return;o.tx=a[1];o.ty=a[2];o.tz=a[3];o.tr=a[4];o.m=a[5];
+   m.p.forEach(a=>{const o=others.get(a[0]);if(!o)return;o.tx=a[1];o.ty=a[2];o.tz=a[3];o.tr=a[4];o.m=a[5];o.grp.visible=!a[6];
     if(!o.init){o.x=o.tx;o.y=o.ty;o.z=o.tz;o.ry=o.tr;o.init=true}})}};
- ws.onclose=()=>{$('net').textContent='🔴 bağlantı yok, yeniden deneniyor...';[...others.keys()].forEach(rmP);
+ ws.onclose=()=>{if(lab.on)labExitUI();$('net').textContent='🔴 bağlantı yok, yeniden deneniyor...';[...others.keys()].forEach(rmP);
   setTimeout(connect,Math.min(10000,1000*++retry))};
  ws.onerror=()=>ws.close()}
 function netTick(dt){
+ $('prompt').style.display=(mode=='play'&&Math.hypot(P.x,P.z)<5)?'block':'none';
  sendT+=dt;if(ws&&ws.readyState==1&&sendT>.066){sendT=0;
   ws.send(JSON.stringify({t:'p',x:+P.x.toFixed(2),y:+P.y.toFixed(2),z:+P.z.toFixed(2),r:+P.ry.toFixed(2),m:+(P.m||0).toFixed(1)}))}
  const k=Math.min(1,dt*10),te=clock.elapsedTime;
@@ -227,6 +244,7 @@ function netTick(dt){
 
 const clock=new THREE.Clock();let walkT=0,amp=0;
 function tick(){requestAnimationFrame(tick);const dt=Math.min(clock.getDelta(),.05),W=innerWidth,H=innerHeight;
+ if(mode=='lab'){labTick(dt,W,H);return}
  let moving=false;P.m=0;
  if(mode=='play'){
   let fx=(k.KeyD||k.ArrowRight?1:0)-(k.KeyA||k.ArrowLeft?1:0)+joy.x,fz=(k.KeyW||k.ArrowUp?1:0)-(k.KeyS||k.ArrowDown?1:0)-joy.y;
@@ -249,6 +267,79 @@ function tick(){requestAnimationFrame(tick);const dt=Math.min(clock.getDelta(),.
  ox+=(tx-ox)*Math.min(1,dt*6);oy+=(ty-oy)*Math.min(1,dt*6);camera.setViewOffset(W,H,ox,oy,W,H);
  sun.position.set(P.x+20,P.y+35,P.z+15);sun.target.position.set(P.x,0,P.z);
  renderer.render(scene,camera)}
+// ---------- Kodlama Okulu (panda bulmacası) ----------
+const LX=700,LZ=700,TS=3,cityFog=scene.fog;
+const lab={on:false,st:null,anim:null,sel:null,lvId:-1,prev:'',gx:0,gy:0,d:0,yaw:0};
+const YAW=[Math.PI,Math.PI/2,0,-Math.PI/2],DXc=[0,1,0,-1],DYc=[-1,0,1,0],ang=(a,b)=>Math.atan2(Math.sin(a-b),Math.cos(a-b));
+const gx=x=>(x-2)*TS,gz=y=>(y-2)*TS;
+const BL={F:['⬆ İleri','#16a34a'],R:['↱ Sağa dön','#2563eb'],L:['↰ Sola dön','#d97706']};
+const labG=new THREE.Group();labG.position.set(LX,0,LZ);scene.add(labG);
+box(5*TS+1.4,.5,5*TS+1.4,'#8d6e63',0,-.4,0,labG);
+for(let i=0;i<5;i++)for(let j=0;j<5;j++)box(TS-.12,.3,TS-.12,(i+j)%2?'#9be28f':'#86d278',gx(i),-.15,gz(j),labG);
+const mark=box(TS-.5,.04,TS-.5,'#fff59d',0,.02,0,labG);
+const rocksG=new THREE.Group();labG.add(rocksG);
+const bamboo=new THREE.Group();labG.add(bamboo);
+[[0,0,3.6],[.55,.3,3],[-.5,.25,3.3]].forEach(a=>{mesh(new THREE.CylinderGeometry(.16,.2,a[2],6),'#43a047',a[0],a[2]/2,a[1],bamboo);
+ mesh(new THREE.CylinderGeometry(.19,.19,.08,6),'#2e7d32',a[0],a[2]*.5,a[1],bamboo);box(1,.08,.3,'#81c784',a[0]+.4,a[2]-.3,a[1],bamboo)});
+const panda=new THREE.Group(),pb=new THREE.Group();panda.add(pb);labG.add(panda);
+box(1.5,1.3,1.2,'#ffffff',0,1,0,pb);box(1.1,.9,1,'#ffffff',0,2.1,.35,pb);
+box(.35,.35,.2,'#111',-.5,2.7,.2,pb);box(.35,.35,.2,'#111',.5,2.7,.2,pb);
+box(.3,.3,.1,'#111',-.28,2.15,.86,pb);box(.3,.3,.1,'#111',.28,2.15,.86,pb);box(.16,.12,.1,'#111',0,1.95,.9,pb);
+box(.45,1,.5,'#111',-.95,.9,0,pb);box(.45,1,.5,'#111',.95,.9,0,pb);box(.55,.6,.6,'#111',-.4,.3,0,pb);box(.55,.6,.6,'#111',.4,.3,0,pb);
+
+function goLab(){if(ws&&ws.readyState==1)ws.send(JSON.stringify({t:'lab'}))}
+$('prompt').onclick=goLab;
+addEventListener('keydown',e=>{if(e.code=='KeyE'&&mode=='play'&&Math.hypot(P.x,P.z)<5)goLab()});
+function labEnterUI(){if(lab.on)return;lab.on=true;mode='lab';scene.fog=null;$('panel').classList.add('hide');$('edit').style.display='none';$('hint').style.display='none';
+ $('prompt').style.display='none';J.style.display=$('jump').style.display='none';$('labui').style.display='block'}
+function labExitUI(){if(!lab.on)return;lab.on=false;lab.st=null;lab.sel=null;lab.lvId=-1;lab.prev='';lab.anim=null;scene.fog=cityFog;$('labui').style.display='none';
+ P.x=0;P.z=5;P.y=0;P.vy=0;setMode('play')}
+function setPanda(x,y,d){lab.gx=x;lab.gy=y;lab.d=d;lab.yaw=YAW[d];lab.anim=null}
+function labLevel(lv){while(rocksG.children.length)rocksG.remove(rocksG.children[0]);
+ lv.rocks.forEach(r=>{const m=mesh(new THREE.IcosahedronGeometry(1.1,0),'#8d949e',gx(r[0]),.8,gz(r[1]),rocksG);m.scale.set(1,.8,1)});
+ bamboo.position.set(gx(lv.goal.x),0,gz(lv.goal.y));mark.position.set(gx(lv.start.x),.02,gz(lv.start.y))}
+function labState(m){lab.st=m;if(!lab.on)labEnterUI();const s=m.level.start;
+ if(lab.lvId!==m.level.id){lab.lvId=m.level.id;labLevel(m.level);setPanda(s.x,s.y,s.d)}
+ if(m.phase=='wait'||(m.phase=='play'&&lab.prev!='play'))setPanda(s.x,s.y,s.d);
+ lab.prev=m.phase;renderLab()}
+function stepStart(A){const to=A.trace[A.i];A.fy=lab.yaw;A.ty=lab.yaw+ang(YAW[to.d],lab.yaw)}
+function labPlay(m){if(!lab.on)return;lab.anim={trace:m.trace,i:0,t:0};stepStart(lab.anim)}
+function el(t,c,x){const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}
+function renderLab(){const m=lab.st;if(!m)return;
+ const nm={};m.players.forEach(p=>nm[p.id]=p.name);
+ const placed=b=>m.slots.some(s=>s&&s.b==b),mine=(m.hands[myId]||[]).filter(b=>!placed(b));
+ if(lab.sel!=null&&!mine.includes(lab.sel))lab.sel=null;if(lab.sel==null&&mine.length==1)lab.sel=mine[0];
+ const H=$('lhead');H.innerHTML='';H.append(el('b',null,'🐼 Kodlama Okulu'),el('span',null,'Tur '+m.round+' · Puan '+m.score));
+ m.players.forEach(p=>{const w=el('span',null,(p.id==myId?'Sen':p.name)+': ');(m.hands[p.id]||[]).forEach(b=>{if(!placed(b))w.append(el('span',null,BL[m.level.blocks[b]][0].split(' ')[0]+' '))});H.append(w)});
+ const ex=el('button',null,'Çık');ex.onclick=()=>ws.send(JSON.stringify({t:'lleave'}));H.append(ex);
+ const T={wait:'Oyuncular bekleniyor ('+m.players.length+'/4). Herkes hazırsa Başlat’a bas.',
+  play:'Panda bambuya ulaşmalı! Her oyuncu elindeki bloğu programda doğru sıraya koysun.'+(m.maxPer>1?' (4 kişiden az oyuncu var: herkes en fazla '+m.maxPer+' blok koyar.)':'')+' Bloğunu seç, sonra bir yuvaya dokun. Koyduğun bloğa dokunarak geri alabilirsin.',
+  run:'Panda programı çalıştırıyor…',win:'🎉 Panda bambuya ulaştı! Yeni bulmaca geliyor.',fail:'😢 Panda bambuya ulaşamadı. Bloklar yeniden dağılıyor, tekrar deneyin!'};
+ $('lmsg').textContent=T[m.phase]||'';
+ const S=$('lslots');S.innerHTML='';
+ for(let i=0;i<4;i++){const s=m.slots[i],b=el('div','sl'+(s?' f':''));
+  if(s){const t=m.level.blocks[s.b];b.textContent=(i+1)+'. '+BL[t][0];b.style.background=BL[t][1];b.style.color='#fff';b.append(el('div',null,s.by==myId?'(sen)':(nm[s.by]||'')))}
+  else b.textContent=(i+1)+'. boş';
+  b.onclick=()=>{if(m.phase!='play')return;
+   if(s){if(s.by==myId)ws.send(JSON.stringify({t:'lu',s:i}))}
+   else if(lab.sel!=null){ws.send(JSON.stringify({t:'lp',b:lab.sel,s:i}));lab.sel=null}};
+  S.append(b)}
+ const Hd=$('lhand');Hd.innerHTML='';
+ mine.forEach(b=>{const t=m.level.blocks[b],e=el('div','blk'+(lab.sel==b?' sel':''),BL[t][0]);e.style.background=BL[t][1];e.onclick=()=>{lab.sel=b;renderLab()};Hd.append(e)});
+ if(m.phase=='wait'){const st=el('button','main','▶ Başlat');st.onclick=()=>ws.send(JSON.stringify({t:'lstart'}));Hd.append(st)}}
+function labTick(dt,W,H){
+ const A=lab.anim,t=clock.elapsedTime,ph=lab.st?lab.st.phase:'';let hop=0,ox=0,oz=0,yaw=lab.yaw,wob=0;
+ if(A){const to=A.trace[A.i];A.t+=dt/.8;const k=Math.min(1,A.t);yaw=A.fy+(A.ty-A.fy)*k;
+  if(to.bump){const s=Math.sin(k*Math.PI)*.3*TS;ox=DXc[lab.d]*s;oz=DYc[lab.d]*s}
+  else if(to.x!==lab.gx||to.y!==lab.gy){ox=(gx(to.x)-gx(lab.gx))*k;oz=(gz(to.y)-gz(lab.gy))*k;hop=Math.sin(k*Math.PI)*.6}
+  if(A.t>=1){lab.yaw=A.ty;lab.gx=to.x;lab.gy=to.y;lab.d=to.d;A.i++;if(to.bump||A.i>=A.trace.length)lab.anim=null;else{A.t=0;stepStart(A)}}}
+ else if(ph=='win')hop=Math.abs(Math.sin(t*7))*.7;else if(ph=='fail')wob=Math.sin(t*20)*.15;
+ panda.position.set(gx(lab.gx)+ox,hop,gz(lab.gy)+oz);panda.rotation.set(0,yaw,wob);
+ bamboo.rotation.z=Math.sin(t*2)*.04;
+ const ch=Math.max(24,22/(.93*camera.aspect));
+ camera.position.set(LX,ch,LZ+ch*.42);camera.lookAt(LX,0,LZ+3.5);
+ sun.position.set(LX+18,32,LZ+14);sun.target.position.set(LX,0,LZ);
+ camera.setViewOffset(W,H,0,0,W,H);renderer.render(scene,camera)}
+
 buildChar();ui();try{connect()}catch(e){$('net').textContent='sunucu yok'}tick();
 </script></body></html>
-
